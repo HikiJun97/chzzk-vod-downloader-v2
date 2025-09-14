@@ -1,7 +1,8 @@
 import os
+import platform
+import subprocess
 import config.config as config
 from PySide6.QtWidgets import QDialog, QMessageBox
-from PySide6.QtCore import Signal
 
 from ui.settingDialog import Ui_SettingDialog
 
@@ -70,7 +71,20 @@ class SettingDialog(QDialog, Ui_SettingDialog):
         QMessageBox.information(self, self.tr("Helper"), msg)
 
     def openLogsFolder(self):
-        os.startfile(os.path.join(config.CONFIG_DIR, "logs"))
+        logs_path = os.path.join(config.CONFIG_DIR, "logs")
+        
+        # 크로스플랫폼 지원을 위한 폴더 열기
+        try:
+            if platform.system() == "Windows":
+                os.startfile(logs_path)
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", logs_path], check=True)
+            else:  # Linux and other Unix-like systems
+                subprocess.run(["xdg-open", logs_path], check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            # 폴더 열기에 실패한 경우 에러 메시지 표시
+            QMessageBox.warning(self, self.tr("Error"), 
+                              self.tr("Failed to open logs folder: {}").format(str(e)))
 
     def getCookies(self):
         """

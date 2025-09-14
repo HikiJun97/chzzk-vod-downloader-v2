@@ -104,7 +104,8 @@ class ContentManager(QObject):
 
         if platform.system() == "Windows":
             item.output_path = item.download_path + '\\' + default_filename
-
+        elif platform.system() == "Darwin":  # macOS
+            item.output_path = item.download_path + '/' + default_filename
         elif platform.system() == "Linux":
             item.output_path = item.download_path + '/' + default_filename
 

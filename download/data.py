@@ -3,7 +3,7 @@ import threading
 import config.config as config
 
 class DownloadData:
-    def __init__(self, base_url, vod_url, output_path, resolution, content_type):
+    def __init__(self, base_url, vod_url, output_path, resolution, content_type, liveRewindPlaybackJson=None):
         self.total_downloaded_size = 0
         self.total_size = 0
         
@@ -34,6 +34,7 @@ class DownloadData:
         self.output_path = output_path
         self.resolution = resolution
         self.content_type = content_type
+        self.liveRewindPlaybackJson = liveRewindPlaybackJson
         
         # 진행도/실패/재시작/스레드 관련 변수
         self.completed_threads = 0

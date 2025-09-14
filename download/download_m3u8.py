@@ -33,13 +33,19 @@ class DownloadM3U8Thread(QThread):
         실제 다운로드 파이프라인이 여기서 진행된다.
         """
         try:
-            data = config.load_config().get("cookies", {})
-            cookies = {
-                'NID_AUT': data.get("NID_AUT", ""),
-                'NID_SES': data.get("NID_SES", "")
-            }
-            content_type, content_no = NetworkManager.extract_content_no(self.s.vod_url)
-            video_id, in_key, adult, vodStatus, liveRewindPlaybackJson, metadata = NetworkManager.get_video_info(content_no, cookies)
+            # liveRewindPlaybackJson이 이미 전달되었는지 확인
+            if self.s.liveRewindPlaybackJson:
+                liveRewindPlaybackJson = self.s.liveRewindPlaybackJson
+            else:
+                # 이전 방식으로 폴백 (호환성 유지)
+                data = config.load_config().get("cookies", {})
+                cookies = {
+                    'NID_AUT': data.get("NID_AUT", ""),
+                    'NID_SES': data.get("NID_SES", "")
+                }
+                content_type, content_no = NetworkManager.extract_content_no(self.s.vod_url)
+                video_id, in_key, adult, vodStatus, liveRewindPlaybackJson, metadata = NetworkManager.get_video_info(content_no, cookies)
+            
             self.s.base_url = NetworkManager.get_video_m3u8_base_url(liveRewindPlaybackJson, self.s.resolution)
             threading.current_thread().name = "DownloadM3U8Thread"  # 스레드 시작 시 이름 재설정
             self.s.start_time = tm.time()

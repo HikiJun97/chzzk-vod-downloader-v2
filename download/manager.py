@@ -32,7 +32,7 @@ class DownloadManager(QObject):
 
     def start(self, item:ContentItem):
         self.item = item
-        self.data = DownloadData(item.base_url, item.vod_url, item.output_path, item.resolution, item.content_type)
+        self.data = DownloadData(item.base_url, item.vod_url, item.output_path, item.resolution, item.content_type, item.liveRewindPlaybackJson)
         self.logger = DownloadLogger()
         self.task = DownloadTask(self.data, self.item, self.logger)
         

@@ -2,6 +2,8 @@ import requests
 import threading
 import time as tm
 import os
+import subprocess
+import shutil
 
 from PySide6.QtCore import QThread, Signal
 from concurrent.futures import ThreadPoolExecutor
@@ -83,6 +85,14 @@ class DownloadThread(QThread):
                         break
 
                 if self.task.state == DownloadState.RUNNING:
+                    # MP4 파일 스트리밍 최적화 수행
+                    self.task.item.post_process = True
+                    if self._optimize_mp4_for_streaming():
+                        self.logger.info("MP4 최적화 완료")
+                    else:
+                        self.logger.warning("MP4 최적화 실패, 원본 파일 유지")
+                    self.task.item.post_process = False
+                    
                     self.s.end_time = tm.time()
                     total_time = self.s.end_time - self.s.start_time
                     self.logger.log_download_complete(total_time)
@@ -266,3 +276,94 @@ class DownloadThread(QThread):
 
         active_downloaded_size = sum(self.s.threads_progress)
         self.s.total_downloaded_size = self.s.completed_progress + active_downloaded_size
+
+    def _optimize_mp4_for_streaming(self):
+        """
+        MP4 파일을 스트리밍 재생에 최적화한다.
+        FFmpeg의 faststart 옵션을 사용하여 메타데이터를 파일 앞으로 이동시킨다.
+        
+        Returns:
+            bool: 최적화 성공 여부
+        """
+        if not self._is_ffmpeg_available():
+            self.logger.warning("FFmpeg를 찾을 수 없습니다. MP4 최적화를 건너뜁니다.")
+            return False
+            
+        temp_path = self.s.output_path + '.tmp'
+        
+        try:
+            # FFmpeg 명령어 구성
+            cmd = [
+                'ffmpeg',
+                '-i', self.s.output_path,      # 입력 파일
+                '-c', 'copy',                  # 코덱 복사 (재인코딩 안함)
+                '-movflags', 'faststart',      # 메타데이터를 파일 앞으로 이동
+                '-y',                          # 덮어쓰기 확인 없음
+                temp_path                      # 출력 파일
+            ]
+            
+            # FFmpeg 실행
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=600  # 10분 타임아웃
+            )
+            
+            if result.returncode == 0:
+                # 최적화 성공: 임시 파일을 원본으로 교체
+                if os.path.exists(temp_path):
+                    # 원본 파일 크기와 임시 파일 크기 비교
+                    orig_size = os.path.getsize(self.s.output_path)
+                    temp_size = os.path.getsize(temp_path)
+                    
+                    # 파일 크기가 너무 다르면 최적화 실패로 간주
+                    if abs(orig_size - temp_size) > orig_size * 0.1:  # 10% 이상 차이
+                        self.logger.warning(f"최적화된 파일 크기가 비정상적입니다. 원본: {orig_size}, 최적화: {temp_size}")
+                        os.remove(temp_path)
+                        return False
+                    
+                    # 안전하게 파일 교체
+                    shutil.move(temp_path, self.s.output_path)
+                    self.logger.info(f"MP4 최적화 완료. 파일 크기: {temp_size} bytes")
+                    return True
+                else:
+                    self.logger.error("최적화된 임시 파일을 찾을 수 없습니다.")
+                    return False
+            else:
+                # FFmpeg 실행 실패
+                error_msg = result.stderr.strip() if result.stderr else "알 수 없는 오류"
+                self.logger.error(f"FFmpeg 최적화 실패: {error_msg}")
+                
+                # 임시 파일이 생성되었다면 삭제
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                return False
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("FFmpeg 최적화가 타임아웃되었습니다.")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return False
+        except Exception as e:
+            self.logger.error(f"MP4 최적화 중 예외 발생: {str(e)}")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return False
+
+    def _is_ffmpeg_available(self):
+        """
+        시스템에 FFmpeg가 설치되어 있는지 확인한다.
+        
+        Returns:
+            bool: FFmpeg 사용 가능 여부
+        """
+        try:
+            result = subprocess.run(
+                ['ffmpeg', '-version'], 
+                capture_output=True, 
+                timeout=10
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False

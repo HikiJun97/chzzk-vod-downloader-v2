@@ -57,7 +57,9 @@ class ContentItemWidget(QWidget, Ui_ContentItemWidget):
         for unique_rep in self.item.unique_reps:
             unique_rep.append("Unknown")  # 초기 값 설정
 
-        self.setresolutionUrlSize(self.item.unique_reps[-1][0], self.item.unique_reps[-1][1], -1)
+        # 마지막 해상도를 기본으로 선택 (올바른 인덱스 사용)
+        last_index = len(self.item.unique_reps) - 1
+        self.setresolutionUrlSize(self.item.unique_reps[-1][0], self.item.unique_reps[-1][1], last_index)
 
         for index, (resolution, base_url, _) in enumerate(self.item.unique_reps):
             self.addRepresentationButton(resolution, base_url, index)
@@ -106,7 +108,7 @@ class ContentItemWidget(QWidget, Ui_ContentItemWidget):
             self.item.resolution = resolution
             self.item.base_url = base_url
             # m3u8인 경우, base_url과 total_size가 None이므로 처리하지 않음
-            if self.item.content_type != "m3u8" and index is not None:
+            if self.item.content_type != "m3u8" and index is not None and index >= 0:
                 self.item.total_size = self.item.unique_reps[index][-1]
                 self.fileSizeLabel.setText(f" {self.item.unique_reps[index][-1]}")
 
@@ -170,14 +172,17 @@ class ContentItemWidget(QWidget, Ui_ContentItemWidget):
             self.progressLabel.setText(" ")
 
         elif self.item.downloadState == DownloadState.RUNNING:
-            self.statusLabel.setText(f"{item.download_remain_time}  {item.download_speed}")
+            if self.item.post_process:
+                self.statusLabel.setText(self.tr("Optimizing MP4..."))
+                self.progressLabel.setText("  🔄 ")
+            else:
+                self.statusLabel.setText(f"{item.download_remain_time}  {item.download_speed}")
+                self.progressLabel.setText(f"  {item.download_progress}% ")
+            
             if self.item.content_type == "m3u8":
-                if self.item.post_process:
-                    self.statusLabel.setText("Post-processing")
                 self.fileSizeLabel.setText(f"  {self.setSize(item.download_size)}")
             else:
                 self.fileSizeLabel.setText(f"  {self.setSize(item.download_size)} / {item.total_size}")
-            self.progressLabel.setText(f"  {item.download_progress}% ")
 
         elif self.item.downloadState == DownloadState.PAUSED:
             self.statusLabel.setText(self.tr("Download paused"))
